@@ -2,64 +2,73 @@
 
 namespace Rareloop\Router;
 
-use Rareloop\Router\Routable;
-use Rareloop\Router\VerbShortcutsTrait;
 use Spatie\Macroable\Macroable;
 
 class RouteGroup implements Routable
 {
-    use VerbShortcutsTrait, Macroable;
+	use VerbShortcutsTrait, Macroable;
 
-    protected $router;
-    protected $prefix;
-    protected $middleware = [];
+	protected $router;
+	protected $middleware = [];
 
-    public function __construct($params, $router)
-    {
-        $prefix = null;
-        $middleware = [];
+	protected $prefix;
+	protected $suffix;
 
-        if (is_string($params)) {
-            $prefix = $params;
-        }
+	public function __construct($params, $router)
+	{
+		$prefix = null;
+		$suffix = null;
 
-        if (is_array($params)) {
-            $prefix = $params['prefix'] ?? null;
-            $middleware = $params['middleware'] ?? [];
+		if (is_string($params)) {
+			$prefix = $params;
+		}
 
-            if (!is_array($middleware)) {
-                $middleware = [$middleware];
-            }
+		if (is_array($params)) {
+			$prefix = $params['prefix'] ?? null;
+			$suffix = $params['suffix'] ?? null;
 
-            $this->middleware += $middleware;
-        }
+			$middleware = $params['middleware'] ?? [];
 
-        $this->prefix = trim($prefix, ' /');
-        $this->router = $router;
-    }
+			if (!is_array($middleware)) {
+				$middleware = [$middleware];
+			}
 
-    private function appendPrefixToUri(string $uri)
-    {
-        return $this->prefix . '/' . ltrim($uri, '/');
-    }
+			$this->middleware += $middleware;
+		}
 
-    public function map(array $verbs, string $uri, $callback) : Route
-    {
-        return $this->router->map($verbs, $this->appendPrefixToUri($uri), $callback)->middleware($this->middleware);
-    }
+		$this->prefix = trim($prefix, ' /');
+		$this->suffix = $suffix;
 
-    public function group($params, $callback) : RouteGroup
-    {
-        if (is_string($params)) {
-            $params = $this->appendPrefixToUri($params);
-        } elseif (is_array($params)) {
-            $params['prefix'] = $params['prefix'] ? $this->appendPrefixToUri($params['prefix']) : null;
-        }
+		$this->router = $router;
+	}
 
-        $group = new RouteGroup($params, $this->router);
+	private function appendPrefixToUri(string $uri)
+	{
+		return $this->prefix . '/' . ltrim($uri, '/');
+	}
 
-        call_user_func($callback, $group);
+	private function appendSuffixToUri() {
+		return $this->suffix;
+	}
 
-        return $this;
-    }
+	public function map(array $verbs, string $uri, $callback) : Route
+	{
+		return $this->router->map($verbs, $this->appendPrefixToUri($uri) . $this->appendSuffixToUri(), $callback)->middleware($this->middleware);
+	}
+
+	public function group($params, $callback) : RouteGroup
+	{
+		if (is_string($params)) {
+			$params = $this->appendPrefixToUri($params);
+		} elseif (is_array($params)) {
+			$params['prefix'] = $params['prefix'] ? $this->appendPrefixToUri($params['prefix']) : null;
+			$params['suffix'] = $params['suffix'] ?? $this->appendSuffixToUri();
+		}
+
+		$group = new RouteGroup($params, $this->router);
+
+		call_user_func($callback, $group);
+
+		return $this;
+	}
 }
